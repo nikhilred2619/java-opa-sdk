@@ -40,7 +40,10 @@ final class X509NameConstraints {
     }
     Subtrees p = new Subtrees();
     Subtrees x = new Subtrees();
-    boolean unhandled = p.read(permitted) | x.read(excluded);
+    // Both permitted and excluded subtrees must be parsed, even if the first contains an unknown name type.
+    boolean unhandledPermitted = p.read(permitted);
+    boolean unhandledExcluded = x.read(excluded);
+    boolean unhandled = unhandledPermitted || unhandledExcluded;
     out.permittedDnsDomains = p.dns;
     out.permittedIpRanges = p.ips;
     out.permittedEmailAddresses = p.emails;

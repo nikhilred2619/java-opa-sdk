@@ -326,7 +326,8 @@ final class X509ChainConstraints {
       return false;
     }
     int offset = lenA - lenB;
-    for (int i = lenA - 1; i >= 0; i--) {
+    boolean matched = true;
+    for (int i = lenA - 1; i >= 0 && matched; i--) {
       char ar = a.charAt(i);
       char br = b.charAt(i - offset);
       if (ar == br) {
@@ -340,9 +341,9 @@ final class X509ChainConstraints {
       if (ar >= 'A' && ar <= 'Z' && br == ar + 'a' - 'A') {
         continue;
       }
-      return false;
+      matched = false;
     }
-    return a.charAt(0) == '.' || lenB <= lenA || b.charAt(lenB - lenA - 1) == '.';
+    return matched && (a.charAt(0) == '.' || lenB <= lenA || b.charAt(lenB - lenA - 1) == '.');
   }
 
   /** Go's dnsCompare: compares names from their last character, case-insensitively, '.' lowest. */
