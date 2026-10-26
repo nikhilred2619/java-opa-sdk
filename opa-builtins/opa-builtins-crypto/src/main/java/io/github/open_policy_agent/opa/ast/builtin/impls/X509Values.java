@@ -96,7 +96,10 @@ final class X509Values {
   /** An object from alternating keys and values. */
   private static RegoObject object(Object... keysAndValues) {
     RegoObject o = new RegoObject();
-    for (int i = 0; i < keysAndValues.length; i += 2) {
+    if ((keysAndValues.length & 1) != 0) {
+      throw new IllegalArgumentException("X.509 object requires key/value pairs");
+    }
+    for (int i = 0; i + 1 < keysAndValues.length; i += 2) {
       put(o, (String) keysAndValues[i], (RegoValue) keysAndValues[i + 1]);
     }
     return o;

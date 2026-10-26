@@ -97,7 +97,8 @@ final class X509Input {
   private static PemBlock decodePem(String data, int from) {
     int rest = from;
     int endTrailerIndex = 0;
-    while (true) {
+    PemBlock matched = null;
+    while (matched == null) {
       if (endTrailerIndex < 0 || endTrailerIndex > data.length() - rest) {
         return null;
       }
@@ -168,8 +169,9 @@ final class X509Input {
       }
       int afterEnd = rest + endIndex + PEM_END.length() - 1;
       String type = new String(typeLine.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
-      return new PemBlock(type, bytes, afterEnd + getLine(data, afterEnd)[2]);
+      matched = new PemBlock(type, bytes, afterEnd + getLine(data, afterEnd)[2]);
     }
+    return matched;
   }
 
   /**
@@ -202,7 +204,8 @@ final class X509Input {
       int dlen = 4;
       int j = 0;
       int trailingGarbage = -1;
-      while (j < 4) {
+      boolean padded = false;
+      while (j < 4 && !padded) {
         if (si == src.length) {
           if (j == 0) {
             return out.toByteArray();
@@ -243,7 +246,7 @@ final class X509Input {
           trailingGarbage = si;
         }
         dlen = j;
-        break;
+        padded = true;
       }
       int val = dbuf[0] << 18 | dbuf[1] << 12 | dbuf[2] << 6 | dbuf[3];
       out.write(val >> 16);

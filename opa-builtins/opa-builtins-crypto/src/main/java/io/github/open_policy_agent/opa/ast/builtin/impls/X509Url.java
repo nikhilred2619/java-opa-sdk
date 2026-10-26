@@ -139,7 +139,8 @@ final class X509Url {
 
   /** Returns the index of the scheme's ':' (0 if a ':' starts the URL), or -1 if there is none. */
   private static int schemeEnd(String rawUrl) {
-    for (int i = 0; i < rawUrl.length(); i++) {
+    int firstInvalid = rawUrl.length();
+    for (int i = 0; i < rawUrl.length() && firstInvalid == rawUrl.length(); i++) {
       char c = rawUrl.charAt(i);
       if (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z') {
         continue;
@@ -150,9 +151,9 @@ final class X509Url {
         }
         continue;
       }
-      return c == ':' ? i : -1;
+      firstInvalid = i;
     }
-    return -1;
+    return firstInvalid < rawUrl.length() && rawUrl.charAt(firstInvalid) == ':' ? firstInvalid : -1;
   }
 
   private static void parseAuthority(X509Url url, String authority) throws UrlException {

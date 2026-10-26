@@ -410,12 +410,8 @@ final class X509Strings {
         throw addrError(in, "address string too short", null);
       }
       int n = 16 - i;
-      for (int j = i - 1; j >= ellipsis; j--) {
-        ip[j + n] = ip[j];
-      }
-      for (int j = ellipsis; j < ellipsis + n; j++) {
-        ip[j] = 0;
-      }
+      System.arraycopy(ip, ellipsis, ip, ellipsis + n, i - ellipsis);
+      Arrays.fill(ip, ellipsis, ellipsis + n, (byte) 0);
     } else if (ellipsis >= 0) {
       throw addrError(in, "the :: must expand to at least one field of zeros", null);
     }
