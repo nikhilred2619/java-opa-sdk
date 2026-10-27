@@ -5,6 +5,33 @@ project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Breaking Changes
+
+- Under `discovery`, `name` now also selects `data.<name>` as the discovered config
+  when `decision` is unset. Setups that set `name` and keep the config at the root of
+  the discovery bundle's `data.json` must drop `name` or move the config under that
+  path ([#254](https://github.com/open-policy-agent/java-opa-sdk/pull/254)) authored by @kroekle
+- Discovered configuration is now merged under the boot configuration instead of
+  replacing it: the boot `discovery` block, services and labels always win, so
+  discovered config no longer needs to repeat the boot services ([#254](https://github.com/open-policy-agent/java-opa-sdk/pull/254)) authored by @kroekle
+
+### Runtime, SDK, Tooling
+
+- Add `discovery.decision` to pick the config node in a discovery bundle, falling
+  back to `name` and then the data root. An undefined path fails the load and keeps
+  the previous configuration ([#254](https://github.com/open-policy-agent/java-opa-sdk/pull/254)) authored by @kroekle
+- Default the discovery `resource` to `bundles/<name>`, and make `service` optional
+  when exactly one service is defined ([#254](https://github.com/open-policy-agent/java-opa-sdk/pull/254)) authored by @kroekle
+- Substitute `${VAR}` in discovered configuration, leaving undefined variables as
+  written ([#254](https://github.com/open-policy-agent/java-opa-sdk/pull/254)) authored by @kroekle
+- Log the keys that boot config overrode at debug level, reject discovered
+  config that changes the discovery service, and warn about unsupported keys in the
+  `discovery` block ([#254](https://github.com/open-policy-agent/java-opa-sdk/pull/254)) authored by @kroekle
+
+### Docs, Website, Ecosystem
+
+- Document discovery and its limitations in the `opa-services` README ([#254](https://github.com/open-policy-agent/java-opa-sdk/pull/254)) authored by @kroekle
+
 ## 0.6.0
 
 This release moves the SDK to Jackson 3, maps Java records natively in

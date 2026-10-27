@@ -59,4 +59,34 @@ class EnvInterpolatorTest {
     String out = EnvInterpolator.interpolate("v=${VAR}", env);
     assertEquals("v=$weird $1 value", out);
   }
+
+  @Test
+  void interpolateLenient_substitutesDefinedAndKeepsUndefined() {
+    final Map<String, String> env = Map.of("A", "1", "EMPTY", "");
+
+    assertEquals(
+        "1|${MISSING}|", EnvInterpolator.interpolateLenient("${A}|${MISSING}|${EMPTY}", env));
+  }
+
+  @Test
+  void interpolateLenient_hasNoEscapeSyntax() {
+    assertEquals("\\${A}", EnvInterpolator.interpolateLenient("\\${A}", Map.of()));
+    assertEquals("\\1", EnvInterpolator.interpolateLenient("\\${A}", Map.of("A", "1")));
+  }
+
+  @Test
+  void interpolateLenient_passesThroughTextWithoutPlaceholders() {
+    assertEquals("plain $ text", EnvInterpolator.interpolateLenient("plain $ text", Map.of()));
+    assertEquals(null, EnvInterpolator.interpolateLenient((String) null, Map.of()));
+  }
+
+  @Test
+  void interpolateLenient_leavesAnEmptyReferenceAsWritten() {
+    assertEquals("a${}b", EnvInterpolator.interpolateLenient("a${}b", Map.of("", "x")));
+  }
+
+  @Test
+  void interpolateLenient_substitutesNamesThatAreNotIdentifiers() {
+    assertEquals("1", EnvInterpolator.interpolateLenient("${my.var}", Map.of("my.var", "1")));
+  }
 }
