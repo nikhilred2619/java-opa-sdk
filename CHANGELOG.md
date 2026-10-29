@@ -7,6 +7,19 @@ project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Breaking Changes
 
+- Writing a bundle id again now replaces the data its earlier revision wrote under the
+  bundle's roots, so a key removed in a new revision is no longer visible. Before, the new
+  data was merged into the old, and a removed entry (for example an admin) stayed in force ([#257](https://github.com/open-policy-agent/java-opa-sdk/pull/257)) authored by @kroekle
+- Bundle data is now written at the data root, as OPA does, and the manifest `roots` only
+  declare what the bundle owns. Before, the data was nested under the first root, so a
+  bundle with root `authz` and `authz/data.json` put its data at `data.authz.authz`.
+  Conflicting roots are now detected across all roots of both bundles, not just the first,
+  and a manifest with an empty `roots` list owns nothing (only a manifest without `roots`
+  owns the whole document) ([#257](https://github.com/open-policy-agent/java-opa-sdk/pull/257)) authored by @kroekle
+- A bundle whose data lies outside its manifest `roots` now fails to load with `manifest
+  roots [authz] do not permit data at path '/other' (hint: check bundle directory
+  structure)`, as in OPA. An object that only leads to a root is allowed. A bundle with
+  `roots: []` fails to load, with or without data ([#257](https://github.com/open-policy-agent/java-opa-sdk/pull/257)) authored by @kroekle
 - Under `discovery`, `name` now also selects `data.<name>` as the discovered config
   when `decision` is unset. Setups that set `name` and keep the config at the root of
   the discovery bundle's `data.json` must drop `name` or move the config under that
@@ -17,6 +30,10 @@ project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Runtime, SDK, Tooling
 
+- Keep `AbstractStore.writeData(bundleId, root, value)` as the one method a store must
+  implement; it is called once per root with that root's slice of the bundle data. A store
+  that does not override `replaceData` keeps merge-only semantics, so it will not remove
+  data on reload. `InMem` overrides it to replace the data atomically ([#257](https://github.com/open-policy-agent/java-opa-sdk/pull/257)) authored by @kroekle
 - Add `discovery.decision` to pick the config node in a discovery bundle, falling
   back to `name` and then the data root. An undefined path fails the load and keeps
   the previous configuration ([#254](https://github.com/open-policy-agent/java-opa-sdk/pull/254)) authored by @kroekle
