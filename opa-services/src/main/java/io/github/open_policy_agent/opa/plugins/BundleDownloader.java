@@ -50,6 +50,7 @@ public abstract class BundleDownloader {
   protected String service;
   protected String resource;
   protected Config.PollingConfig polling;
+  protected final BundleStatus status;
   protected volatile String etag;
   protected volatile long lastModifiedTime = 0;
   protected long maxSizeBytes = Config.BundleConfig.DEFAULT_MAX_SIZE_BYTES;
@@ -104,11 +105,18 @@ public abstract class BundleDownloader {
    */
   protected BundleDownloader(
       String name, PluginManager manager, ServicePlugin.Service authService) {
+    this(name, name, manager, authService);
+  }
+
+  /** Like the constructor above, with the name the status is reported under. */
+  protected BundleDownloader(
+      String name, String statusName, PluginManager manager, ServicePlugin.Service authService) {
     this.name = name;
     this.manager = manager;
     this.authService = authService;
     this.httpClient = authService != null ? authService.getClient() : defaultHttpClient();
     this.initialActivation = new CompletableFuture<>();
+    this.status = new BundleStatus(statusName);
   }
 
   private static HttpClient defaultHttpClient() {
@@ -272,14 +280,12 @@ public abstract class BundleDownloader {
    *     downloads never overlap.
    */
   protected CompletableFuture<Void> downloadBundle() {
+    status.request();
     try {
       Config.ServiceConfig serviceConfig = manager.getConfig().getService(service);
       if (serviceConfig == null) {
         manager.getLogger().error("Bundle '%s': Service '%s' not found", name, service);
-        if (!initialActivation.isDone()) {
-          initialActivation.completeExceptionally(
-              new RuntimeException("Service '" + service + "' not found"));
-        }
+        fail(new RuntimeException("Service '" + service + "' not found"));
         return CompletableFuture.completedFuture(null);
       }
 
@@ -313,10 +319,15 @@ public abstract class BundleDownloader {
 
     } catch (Exception e) {
       manager.getLogger().error("Bundle '%s': Download error: %s", name, e.getMessage());
-      if (!initialActivation.isDone()) {
-        initialActivation.completeExceptionally(e);
-      }
+      fail(e);
       return CompletableFuture.completedFuture(null);
+    }
+  }
+
+  private void fail(Throwable cause) {
+    status.failed(cause);
+    if (!initialActivation.isDone()) {
+      initialActivation.completeExceptionally(cause);
     }
   }
 
@@ -331,6 +342,7 @@ public abstract class BundleDownloader {
 
     if (lastModifiedTime != 0 && lastModifiedTime == currentModTimeMillis) {
       manager.getLogger().debug("Bundle '%s': File not modified, skipping activation", name);
+      status.notModified();
       if (!initialActivation.isDone()) {
         initialActivation.complete(null);
       }
@@ -392,14 +404,13 @@ public abstract class BundleDownloader {
               ? throwable.getCause()
               : throwable;
       manager.getLogger().error("Bundle '%s': Download error: %s", name, cause.getMessage());
-      if (!initialActivation.isDone()) {
-        initialActivation.completeExceptionally(cause);
-      }
+      fail(cause);
       return;
     }
 
     if (response.statusCode() == 304) {
       manager.getLogger().debug("Bundle '%s': Not modified (ETag match)", name);
+      status.notModified();
       if (!initialActivation.isDone()) {
         initialActivation.complete(null);
       }
@@ -411,9 +422,7 @@ public abstract class BundleDownloader {
       if (!isAcceptableContentType(contentType)) {
         String errorMsg = "Unexpected Content-Type: '" + contentType + "'";
         manager.getLogger().error("Bundle '%s': %s", name, errorMsg);
-        if (!initialActivation.isDone()) {
-          initialActivation.completeExceptionally(new RuntimeException(errorMsg));
-        }
+        fail(new RuntimeException(errorMsg));
         return;
       }
       OptionalLong contentLength = response.headers().firstValueAsLong("Content-Length");
@@ -422,30 +431,26 @@ public abstract class BundleDownloader {
         body = readBodyWithLimit(response.body(), contentLength);
       } catch (Exception e) {
         manager.getLogger().error("Bundle '%s': Download error: %s", name, e.getMessage());
-        if (!initialActivation.isDone()) {
-          initialActivation.completeExceptionally(e);
-        }
+        fail(e);
         return;
       }
-      response.headers().firstValue("ETag").ifPresent(newEtag -> this.etag = newEtag);
+      final String newEtag = response.headers().firstValue("ETag").orElse(null);
       try {
         activateBundle(body);
       } catch (Exception e) {
         manager.getLogger().error("Bundle '%s': Activation failed: %s", name, e.getMessage());
-        if (!initialActivation.isDone()) {
-          initialActivation.completeExceptionally(e);
-        }
+        fail(e);
         return;
       }
+      // Only a bundle that activated may be answered "not modified" next time.
+      this.etag = newEtag;
       if (!initialActivation.isDone()) {
         initialActivation.complete(null);
       }
     } else {
-      String errorMsg = "Download failed with status " + response.statusCode();
-      manager.getLogger().error("Bundle '%s': %s", name, errorMsg);
-      if (!initialActivation.isDone()) {
-        initialActivation.completeExceptionally(new RuntimeException(errorMsg));
-      }
+      final HttpStatusException failure = new HttpStatusException(response.statusCode());
+      manager.getLogger().error("Bundle '%s': %s", name, failure.getMessage());
+      fail(failure);
     }
   }
 
@@ -509,6 +514,19 @@ public abstract class BundleDownloader {
     return buffer.toByteArray();
   }
 
+  static class HttpStatusException extends RuntimeException {
+    private final int statusCode;
+
+    HttpStatusException(int statusCode) {
+      super("server replied with " + HttpStatusText.of(statusCode));
+      this.statusCode = statusCode;
+    }
+
+    int statusCode() {
+      return statusCode;
+    }
+  }
+
   static class BundleSizeLimitException extends RuntimeException {
     BundleSizeLimitException(String message) {
       super(message);
@@ -520,6 +538,9 @@ public abstract class BundleDownloader {
    *
    * <p>This method is called when new bundle data is available (either from an HTTP download, or
    * when a local file has been modified).
+   *
+   * <p>Implementations call {@code status.downloaded(...)} once the bundle has parsed, so a bundle
+   * that cannot be loaded does not count as a successful download.
    *
    * @param bundleData the raw bundle bytes (typically a gzipped tarball)
    */
