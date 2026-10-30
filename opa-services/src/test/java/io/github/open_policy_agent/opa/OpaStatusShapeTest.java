@@ -451,6 +451,19 @@ class OpaStatusShapeTest {
     assertEquals(before.path("last_successful_activation"), failed.path("last_successful_activation"));
   }
 
+  // ---- plugins ----
+
+  @Test
+  void pluginsArePostedAsStateObjectsAndTheBundlePluginIsKeyedBundle() throws Exception {
+    startWithBundleA("rev-1");
+
+    final JsonNode plugins = awaitReport(r -> r.path("plugins").has("bundle")).path("plugins");
+
+    assertEquals("OK", plugins.path("bundle").path("state").asString());
+    assertFalse(plugins.has("bundles"), plugins.toString());
+    plugins.properties().forEach(entry -> assertTrue(entry.getValue().has("state"), plugins.toString()));
+  }
+
   // ---- labels ----
 
   @Test
