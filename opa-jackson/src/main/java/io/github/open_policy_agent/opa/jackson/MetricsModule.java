@@ -3,13 +3,15 @@ package io.github.open_policy_agent.opa.jackson;
 import com.fasterxml.jackson.annotation.JsonValue;
 import io.github.open_policy_agent.opa.metrics.Metrics;
 import io.github.open_policy_agent.opa.metrics.SimpleMetrics;
-import java.time.Duration;
+import tools.jackson.core.JsonGenerator;
+import tools.jackson.databind.SerializationContext;
 import tools.jackson.databind.module.SimpleModule;
+import tools.jackson.databind.ser.std.StdSerializer;
 
 /**
  * Jackson {@link SimpleModule} that adds {@code @JsonValue} behavior to {@link SimpleMetrics}'s inner metrics.
- * Register this module to have {@link Metrics.Timer} serialize as the underlying
- * {@link Duration} value, {@link Metrics.Counter} as its {@code int} value and
+ * Register this module to have {@link Metrics.Timer} serialize as its value in nanoseconds (matching
+ * the {@code timer_<name>_ns} keys written by the decision log plugin), {@link Metrics.Counter} as its {@code int} value and
  * {@link Metrics.Histogram} as its {@link Metrics.Histogram.Values} stats, rather than as default
  * beans. None of them expose a Jackson-visible property, so without these mixins serializing one
  * fails outright.
@@ -28,14 +30,20 @@ public class MetricsModule extends SimpleModule {
 
   public MetricsModule() {
     super("opa-metrics");
-    setMixInAnnotation(Metrics.Timer.class, TimerMixin.class);
+    addSerializer(Metrics.Timer.class, new TimerSerializer());
     setMixInAnnotation(Metrics.Counter.class, CounterMixin.class);
     setMixInAnnotation(Metrics.Histogram.class, HistogramMixin.class);
   }
 
-  interface TimerMixin {
-    @JsonValue
-    Duration value();
+  static final class TimerSerializer extends StdSerializer<Metrics.Timer> {
+    TimerSerializer() {
+      super(Metrics.Timer.class);
+    }
+
+    @Override
+    public void serialize(Metrics.Timer timer, JsonGenerator gen, SerializationContext ctxt) {
+      gen.writeNumber(timer.value().toNanos());
+    }
   }
 
   interface CounterMixin {
